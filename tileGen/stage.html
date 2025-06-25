@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>2.5D Infinite Grid</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #222;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background-color: #527b8d;
+    }
+  </style>
+</head>
+<body>
+<canvas id="mapCanvas" width="1280" height="720"></canvas>
+
+<script>
+  const canvas = document.getElementById("mapCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const tileWidth = 72;
+  const tileHeight = 32;
+
+  const playerImage = new Image();
+  playerImage.src = "assets/themask.png";
+
+  const tileImages = {
+    grass: new Image(),
+    dirt: new Image(),
+    water: new Image()
+  };
+  tileImages.grass.src = "assets/tiles/grass.png";
+  tileImages.dirt.src = "assets/tiles/dirt.png";
+  tileImages.water.src = "assets/tiles/water.png";
+
+  const player = { x: 0, y: 0 };
+  let cameraX = 0, cameraY = 0;
+
+  const moveDelay = 150;
+  let canMove = true;
+
+  const drawRange = 10;
+
+  function getTileType(x, y) {
+    const seed = (x * 374761393 + y * 668265263) ^ 0x5bf03635;
+    const noise = Math.abs((Math.sin(seed) * 10000) % 1);
+    if (noise < 0.6) return "grass";
+    else if (noise < 0.8) return "dirt";
+    else return "water";
+  }
+
+  function tileToScreen(x, y) {
+    const worldX = (x - y) * tileWidth / 2;
+    const worldY = (x + y) * tileHeight / 2;
+    return {
+      screenX: worldX - cameraX + canvas.width / 2,
+      screenY: worldY - cameraY + canvas.height / 2
+    };
+  }
+
+  function drawTile(x, y) {
+    const tileType = getTileType(x, y);
+    const tileImg = tileImages[tileType];
+
+    const { screenX, screenY } = tileToScreen(x, y);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(tileImg, screenX - tileWidth / 2, screenY, tileWidth, tileHeight);
+    ctx.restore();
+  }
+
+  function drawPlayer() {
+    const { screenX, screenY } = tileToScreen(player.x, player.y);
+    ctx.drawImage(playerImage, screenX - tileWidth / 2, screenY - tileHeight, tileWidth, tileHeight * 2);
+  }
+
+  function drawGrid() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let y = player.y - drawRange; y <= player.y + drawRange; y++) {
+      for (let x = player.x - drawRange; x <= player.x + drawRange; x++) {
+        drawTile(x, y);
+      }
+    }
+    drawPlayer();
+  }
+
+  function animateTiles() {
+    let progress = 0;
+    function step() {
+      progress += 0.05;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = player.y - drawRange; y <= player.y + drawRange; y++) {
+        for (let x = player.x - drawRange; x <= player.x + drawRange; x++) {
+          drawTile(x, y, Math.min(1, progress));
+        }
+      }
+      drawPlayer();
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    step();
+  }
+
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  function updateCamera() {
+    const targetX = (player.x - player.y) * tileWidth / 2;
+    const targetY = (player.x + player.y) * tileHeight / 2;
+    cameraX = lerp(cameraX, targetX, 0.1);
+    cameraY = lerp(cameraY, targetY, 0.1);
+  }
+
+  function gameLoop() {
+    updateCamera();
+    drawGrid();
+    requestAnimationFrame(gameLoop);
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (!canMove) return;
+
+    let moved = false;
+    switch (e.key) {
+      case "ArrowUp":
+      case "w":
+        player.y += 1;
+        moved = true;
+        break;
+      case "ArrowDown":
+      case "s":
+        player.y -= 1;
+        moved = true;
+        break;
+      case "ArrowLeft":
+      case "a":
+        player.x -= 1;
+        moved = true;
+        break;
+      case "ArrowRight":
+      case "d":
+        player.x += 1;
+        moved = true;
+        break;
+    }
+
+    if (moved) {
+      canMove = false;
+      animateTiles();
+      setTimeout(() => {
+        canMove = true;
+      }, moveDelay);
+    }
+  });
+
+  function loadImages(callback) {
+    let loaded = 0;
+    const total = Object.keys(tileImages).length + 1;
+
+    function check() {
+      loaded++;
+      if (loaded >= total) callback();
+    }
+
+    for (let key in tileImages) tileImages[key].onload = check;
+    playerImage.onload = check;
+  }
+
+  loadImages(() => {
+    gameLoop();
+  });
+</script>
+</body>
+</html>
